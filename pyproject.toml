@@ -1,0 +1,105 @@
+[tool.poetry]
+name = "yt_database"
+version = "0.1.0"
+description = "Projektbeschreibung"
+authors = ["Autor <email@domain>"]
+readme = "README.md"
+packages = [{ include = "yt_database", from = "src" }]
+
+
+[tool.poetry.scripts]
+transcribe-video = "yt_database.cli.get_video_transcription:get_video_transcription_main"
+batch-transcribe = "yt_database.cli.batch_transcribe:batch_transcribe_main"
+download-channel-metadata = "yt_database.cli.download_channel_metadata:download_channel_metadata_main"
+migrate-markdown = "scripts.migrate_markdown_to_database:main"
+gui = "yt_database.gui.main_window:main"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+PyYAML = "*"
+loguru = "^0.7.3"
+pydantic = "^2.7.1"
+pydantic-settings = "^2.2.1"
+yt-dlp = "^2025.6.30"
+pyside6 = "^6.9.1"
+peewee = "^3.17.1"
+frontmatter-format = "^0.2.1"
+
+[tool.poetry.group.dev.dependencies]
+black = ">=25.1.0"
+mypy = ">=1.15.0"
+ruff = ">=0.11.6"
+pytest = ">=8.3.5"
+pytest-cov = ">=5.0.0"
+pytest-asyncio = ">=0.23.5"
+poethepoet = ">=0.33.1"
+pytest-qt = "^4.5.0"
+pytest-mock = "^3.14.1"
+isort = "^6.0.1"
+
+[tool.poe.tasks]
+clean = "bash -c \"find . -type d -name '__pycache__' -exec rm -rf {} +; rm -rf .pytest_cache .mypy_cache .coverage htmlcov .ruff_cache\""
+lint = "ruff check src"
+format = "black src"
+typecheck = "mypy src"
+test = "pytest"
+sort = "isort src"
+migrate = "python scripts/migrate_markdown_to_database.py"
+gui = "poetry run gui"
+empty = "find . -type f -empty -not -path './.venv/*'"
+check = ["format", "lint --fix", "sort", "typecheck", "test"]
+emoji-scan = "python scripts/emoji_scan.py --root ."
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src"]
+addopts = [
+    "--cov=src/yt_database",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=80",
+    "--strict-markers",
+    "--disable-warnings",
+    "-v",
+]
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "slow: marks tests as slow running",
+    "api: marks tests for API functionality",
+    "gui: marks tests for GUI functionality",
+    "database: marks tests for database functionality",
+]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 120
+lint.ignore = ["F841", "E501"]
+
+[tool.black]
+line-length = 120
+
+[tool.mypy]
+files = ["src"]
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["yt_database"]
+known_third_party = [
+    "youtube_transcript_api",
+    "pydantic",
+    "peewee",
+    "PyYAML",
+    "yt_dlp",
+    "sphinx",
+    "pyside6",
+    "loguru",
+]
+skip = [".gitignore", ".dockerignore"]
+multi_line_output = 3
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]

@@ -1,0 +1,16 @@
+debug: false
+database_url: ''
+api_key: ''
+test_video_id: z9L8G3FaIVc
+prompt_type: detailed_database
+transcription_provider: yt_dlp
+yt_dlp_cookies_path: ./cookies.txt
+use_yt_dlp_cookies: true
+use_real_services: false
+default_interval: 60
+default_max_videos: 10
+project_path: ./projects
+last_channel_url: https://www.youtube.com/@99ZUEINS
+main_window_geometry: 100,100,1200,800
+web_window_geometry: 01d9d0cb00030000000004b0000000a700000728000003f7000004b0000000d000000728000003f700000000000000000780000004b0000000d000000728000003f7
+webview_url: https://notebooklm.google.com/notebook/23b30906-0d2c-4cfb-969e-21dce51f6f57

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SidebarWidget</class>
+ <widget class="QWidget" name="SidebarWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>200</width>
+    <height>320</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_dashboard">
+     <property name="text">
+      <string>Dashboard</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/dashboard-3.svg</normaloff>:/icons/dashboard-3.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_database">
+     <property name="text">
+      <string>Datenbank</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/database.svg</normaloff>:/icons/database.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_transcripts">
+     <property name="text">
+      <string>Transkripte</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/markdown-document-programming.svg</normaloff>:/icons/markdown-document-programming.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_search">
+     <property name="text">
+      <string>Suche</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/search-visual.svg</normaloff>:/icons/search-visual.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_log">
+     <property name="text">
+      <string>Log</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/bug-virus-document.svg</normaloff>:/icons/bug-virus-document.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="sidebar_btn_text_editor">
+     <property name="text">
+      <string>Text Editor</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/text-style.svg</normaloff>:/icons/text-style.svg</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Orientation::Vertical</enum>
+     </property>
+     <property name="sizeType">
+      <enum>QSizePolicy::Policy::Expanding</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item alignment="Qt::AlignmentFlag::AlignBottom">
+    <widget class="QPushButton" name="sidebar_btn_close_worker">
+     <property name="text">
+      <string>Beende Worker</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../../resources/icons.qrc">
+       <normaloff>:/icons/emergency-exit.svg</normaloff>:/icons/emergency-exit.svg</iconset>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="../../resources/icons.qrc"/>
+ </resources>
+ <connections/>
+</ui>

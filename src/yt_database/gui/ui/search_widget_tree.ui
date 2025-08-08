@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SearchWidgetTree</class>
+ <widget class="QWidget" name="SearchWidgetTree">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Erweiterte Suche</string>
+  </property>
+  <layout class="QVBoxLayout" name="main_layout">
+   <item>
+    <layout class="QHBoxLayout" name="search_layout">
+     <item>
+      <widget class="QLineEdit" name="search_widget_tree_input">
+       <property name="placeholderText">
+        <string>Stichwort in Kapiteln suchen (z.B. 'Kritik', 'Politik', 'Analyse')...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="search_widget_tree_button">
+       <property name="toolTip">
+        <string>Suche starten (Enter)</string>
+       </property>
+       <property name="text">
+        <string>Suchen</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../../resources/icons.qrc">
+         <normaloff>:/icons/search-visual.svg</normaloff>:/icons/search-visual.svg</iconset>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="search_widget_tree_status_label">
+     <property name="text">
+      <string>Bitte gib einen Suchbegriff ein.</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignmentFlag::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeView" name="search_widget_tree_results">
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+     </property>
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+     </property>
+     <property name="sortingEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="../../resources/icons.qrc"/>
+ </resources>
+ <connections/>
+</ui>
