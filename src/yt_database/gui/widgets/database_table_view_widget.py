@@ -762,7 +762,9 @@ class DatabaseOverviewWidget(QWidget):
         for proxy_index in selected_indexes:
             source_index = self.proxy_model.mapToSource(proxy_index)
             row = source_index.row()
-            has_transcript = not self.model.item(row, 7).icon().isNull()  # Transkribiert ist Spalte 7 - prüfen ob Icon gesetzt ist
+            has_transcript = (
+                not self.model.item(row, 7).icon().isNull()
+            )  # Transkribiert ist Spalte 7 - prüfen ob Icon gesetzt ist
             if not has_transcript:
                 count += 1
         return count

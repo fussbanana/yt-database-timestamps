@@ -112,7 +112,6 @@ class FontManager:
         except Exception as e:
             logger.error(f"FontManager: Fehler beim Setup der Font-Varianten: {e}")
 
-
     def get_font(self, variant: str = "ui_default") -> QFont:
         """
         Gibt eine spezifische Font-Variante zurück.

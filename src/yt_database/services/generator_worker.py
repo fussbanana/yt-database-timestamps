@@ -1,3 +1,5 @@
+# src/yt_database/services/generator_worker.py
+
 from loguru import logger
 from PySide6.QtCore import QObject, Signal
 
@@ -36,7 +38,6 @@ class GeneratorWorker(QObject):
             self.status_update.emit(
                 f"Starte Verarbeitung für Transcript: {self.video_id} (Channel: {self.channel_handle})"
             )
-            # self.generator_service.project_manager.create_project(self.channel_handle, self.video_id)
             transcript_data = self.generator_service.transcript_service.fetch_transcript(self.video_id)
             if (
                 transcript_data.entries
@@ -46,7 +47,6 @@ class GeneratorWorker(QObject):
                 self.status_update.emit(
                     f"Gültiges Transkript mit {len(transcript_data.entries)} Zeilen für {self.video_id} gefunden."
                 )
-                # formatted = self.generator_service.formatter_service.format(td)
                 self.generator_service.file_service.write_transcript_file(transcript_data)
                 self.generator_service.project_manager.update_index(transcript_data)
                 self.status_update.emit(f"Verarbeitung für Transcript {self.video_id} erfolgreich abgeschlossen.")

@@ -1,45 +1,21 @@
 from functools import partial
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, List, Dict
 
 from loguru import logger
 from PySide6.QtCore import QThread
 
-"""
-WorkerManager-Modul
-Verwaltet die Ausführung, Überwachung und das Lifecycle-Management von Hintergrund-Worker-Threads
-in einer Qt-basierten Anwendung. Bietet eine Singleton-Instanz, Task-Tracking und automatisches Cleanup.
-"""
-
 
 class WorkerManager:
-    """Verwaltet die Ausführung und das Lifecycle-Management von Worker-Threads.
-
-    Diese Klasse bietet Methoden zum Starten, Überwachen und Aufräumen von Hintergrund-Tasks
-    (Worker), die in separaten Qt-Threads laufen. Sie stellt sicher, dass Tasks eindeutig
-    verwaltet werden und bietet ein Singleton-Pattern für globalen Zugriff.
-
-    Attributes:
-        main_window (Any): Referenz auf das MainWindow für UI-Interaktionen.
-        running_tasks (dict[str, dict]): Tracking der aktuell laufenden Tasks.
-        _instance (Optional[WorkerManager]): Singleton-Instanz.
-
-    Example:
-        manager = WorkerManager.instance(main_window)
-        manager.start_worker("task1", factory, on_finish, on_error)
-    """
 
     _instance: Optional["WorkerManager"] = None
 
     def __init__(self, main_window: Any) -> None:
-        """Initialisiert den WorkerManager und das Task-Tracking.
 
-        Args:
-            main_window (Any): Referenz auf das MainWindow für UI-Interaktionen.
-        """
         logger.debug("Initialisiere WorkerManager.")
         self.main_window = main_window
         self.running_tasks: dict[str, dict] = {}
-        logger.debug("WorkerManager initialisiert.")
+        self._workers: Dict[str, Dict[str, Any]] = {}
+        logger.info("WorkerManager initialisiert.")
 
     def start_worker(
         self,
@@ -161,3 +137,73 @@ class WorkerManager:
                 raise ValueError("main_window muss beim ersten Aufruf übergeben werden!")
             cls._instance = cls(main_window)
         return cls._instance
+
+    def get_running_tasks_info(self) -> List[Dict[str, Any]]:
+        """Get information about all running tasks.
+        Returns:
+            List of dictionaries containing task information with keys:
+            - 'name': Task name
+            - 'is_running': Boolean indicating if task is currently running
+            - 'progress': Current progress (if available)
+        """
+        tasks_info = []
+        for task_name, worker_info in self._workers.items():
+            worker = worker_info.get("worker")
+            thread = worker_info.get("thread")
+            is_running = worker is not None and thread is not None and thread.isRunning()
+            task_info = {
+                "name": task_name,
+                "is_running": is_running,
+                "progress": getattr(worker, "progress", 0) if worker else 0,
+            }
+            tasks_info.append(task_info)
+        return tasks_info
+
+    def stop_all_workers(self) -> int:
+        """Stop all running workers and their threads.
+
+        Returns:
+            int: Number of workers that were stopped
+        """
+        stopped_count = 0
+
+        for task_name, worker_info in self._workers.items():
+            worker = worker_info.get("worker")
+            thread = worker_info.get("thread")
+
+            if thread is not None and thread.isRunning():
+                logger.debug(f"Stoppe Worker: {task_name}")
+
+                # Stoppe den Worker falls er eine stop-Methode hat
+                if worker and hasattr(worker, "stop"):
+                    worker.stop()
+
+                # Stoppe den Thread
+                thread.quit()
+                thread.wait(3000)  # Warte max. 3 Sekunden
+
+                if thread.isRunning():
+                    logger.warning(f"Thread für {task_name} konnte nicht ordnungsgemäß gestoppt werden")
+                    thread.terminate()
+                else:
+                    logger.debug(f"Worker {task_name} erfolgreich gestoppt")
+                    stopped_count += 1
+
+        # Aufräumen: Gestoppte Worker aus dem Dictionary entfernen
+        self._cleanup_finished_workers()
+
+        logger.info(f"Insgesamt {stopped_count} Worker gestoppt")
+        return stopped_count
+
+    def _cleanup_finished_workers(self) -> None:
+        """Remove finished workers from the workers dictionary."""
+        finished_tasks = []
+
+        for task_name, worker_info in self._workers.items():
+            thread = worker_info.get("thread")
+            if thread is None or not thread.isRunning():
+                finished_tasks.append(task_name)
+
+        for task_name in finished_tasks:
+            logger.debug(f"Entferne beendeten Worker: {task_name}")
+            del self._workers[task_name]

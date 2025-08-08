@@ -6,13 +6,15 @@ bereit und zeigt die Ergebnisse in einem hierarchischen TreeView an, gruppiert n
 """
 
 from collections import defaultdict
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
 from loguru import logger
-from PySide6.QtCore import Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QStringListModel, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
+    QCompleter,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -25,14 +27,20 @@ from PySide6.QtWidgets import (
 
 from yt_database.gui.utils.icons import Icons
 from yt_database.gui.widgets.delegates import RichTextHighlightDelegate
+from yt_database.gui.widgets.search_strategy_info_window import SearchStrategyInfoWindow
 from yt_database.models.search_models import SearchResult
-from yt_database.gui.utils.icons import Icons
+from yt_database.models.search_strategy import SearchStrategy, SEARCH_STRATEGIES
+from yt_database.search.query_parser import parse_search_query, tokens_for_highlighting
 
 
 class SearchWidgetTree(QWidget):
     """Ein Widget zur Suche in Kapiteln und zur hierarchischen Anzeige der Ergebnisse."""
 
-    search_requested = Signal(str)
+    search_requested = Signal(str, SearchStrategy)  # Erweitert um SearchStrategy
+    # Class-level attribute annotations for tooling
+    _completer: Optional[QCompleter]
+    _completer_model: Optional[QStringListModel]
+    _suggest_provider: Optional[Callable[[str], List[str]]]
 
     def __init__(self, parent=None):
         """Initialisiert das Widget."""
@@ -65,6 +73,30 @@ class SearchWidgetTree(QWidget):
         self.search_button.setToolTip("Startet die Suche nach den eingegebenen Begriffen (Enter möglich).")
         self.search_button.setIcon(Icons.get(Icons.SEARCH))
 
+        # Strategieauswahl-ComboBox
+        self.strategy_combo = QComboBox()
+        self.strategy_combo.setObjectName("search_widget_tree_strategy")
+        self.strategy_combo.setToolTip("Wähle eine Suchstrategie für die Interpretation deiner Eingabe")
+
+        # Strategien aus der Definition hinzufügen
+        for strategy_info in SEARCH_STRATEGIES:
+            self.strategy_combo.addItem(
+                strategy_info.display_name, strategy_info.strategy  # Strategy als UserData speichern
+            )
+
+        # Tooltip für aktuelle Auswahl dynamisch setzen
+        self.strategy_combo.currentTextChanged.connect(self._update_strategy_tooltip)
+
+        # Info-Fenster Button
+        self.info_button = QPushButton("Info")
+        self.info_button.setIcon(Icons.get(Icons.INFO))
+        self.info_button.setObjectName("search_info_button")
+        self.info_button.setToolTip("Öffne Informationsfenster zu den Suchstrategien")
+        self.info_button.clicked.connect(self._show_info_window)
+
+        # Info-Fenster (wird lazy erstellt)
+        self.info_window: Optional[SearchStrategyInfoWindow] = None
+
         self.results_tree = QTreeView()
         self.results_tree.setObjectName("search_widget_tree_results")
         self.results_tree.setToolTip("Hier werden die Suchergebnisse als Baum angezeigt: Video → Sektion → Kapitel.")
@@ -95,11 +127,18 @@ class SearchWidgetTree(QWidget):
         self.status_label.setToolTip("Status- und Hinweistexte zur Suche werden hier angezeigt.")
         self.status_label.hide()
 
+        # Optionaler Completer (ohne Provider zunächst leer). Kann später per Hook verbunden werden.
+        self._completer = None
+        self._completer_model = None
+        self._suggest_provider = None
+
     def _setup_layouts(self) -> None:
         """Ordnet die initialisierten Widgets in Layouts an."""
         search_layout = QHBoxLayout()
         search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.strategy_combo)
         search_layout.addWidget(self.search_button)
+        search_layout.addWidget(self.info_button)
 
         main_layout = QVBoxLayout(self)
         main_layout.addLayout(search_layout)
@@ -112,6 +151,27 @@ class SearchWidgetTree(QWidget):
         self.search_button.clicked.connect(self._on_search_clicked)
         self.search_input.returnPressed.connect(self._on_search_clicked)
         self.results_tree.doubleClicked.connect(self._on_result_double_clicked)
+
+        # Such-Input Änderungen für Query-Vorschau
+        self.search_input.textChanged.connect(self._update_info_window)
+        self.strategy_combo.currentTextChanged.connect(self._update_info_window)
+        self.search_input.returnPressed.connect(self._on_search_clicked)
+        self.results_tree.doubleClicked.connect(self._on_result_double_clicked)
+        # Live-Parsing zur besseren Hervorhebung beim Tippen (nicht invasiv, keine Backend-Suche)
+        self.search_input.textChanged.connect(self._on_query_changed)
+
+    def _update_strategy_tooltip(self, display_name: str) -> None:
+        """Aktualisiert den Tooltip der Strategieauswahl basierend auf der aktuellen Auswahl."""
+        current_index = self.strategy_combo.currentIndex()
+        if 0 <= current_index < len(SEARCH_STRATEGIES):
+            strategy_info = SEARCH_STRATEGIES[current_index]
+            tooltip = f"{strategy_info.description}\n\nBeispiel: {strategy_info.example}"
+            self.strategy_combo.setToolTip(tooltip)
+
+    def _get_selected_strategy(self) -> SearchStrategy:
+        """Gibt die aktuell ausgewählte Suchstrategie zurück."""
+        strategy_data = self.strategy_combo.currentData()
+        return strategy_data if isinstance(strategy_data, SearchStrategy) else SearchStrategy.AUTO
 
     def set_search_terms(self, search_terms: List[str]):
         """Setzt die aktuellen Suchbegriffe für die Hervorhebung."""
@@ -157,6 +217,31 @@ class SearchWidgetTree(QWidget):
 
         return item
 
+    def _snippet_to_plain_text(self, text: str) -> str:
+        """Wandelt ein FTS5-Snippet mit HTML-Markup in Plain-Text um.
+
+        Der Delegate rendert Hervorhebung per HTML selbst. Um sichtbare
+        Tags wie <mark> in der TreeView zu vermeiden, entfernen wir
+        HTML-Markup aus Snippets und überlassen die farbliche Hervorhebung
+        dem Delegate anhand der gesetzten Suchbegriffe.
+
+        Args:
+            text: Snippet-Text, potenziell mit HTML-Tags.
+
+        Returns:
+            Bereinigter Plain-Text ohne Tags und mit decodierten Entities.
+        """
+        if not text:
+            return ""
+        try:
+            import re
+            import html as py_html
+
+            no_tags = re.sub(r"<[^>]+>", "", text)
+            return py_html.unescape(no_tags)
+        except Exception:
+            return text
+
     def _refresh_highlighting(self) -> None:
         """Erzwingt ein Redraw aller sichtbaren Zellen, damit der Delegate neu zeichnet."""
         if not self.results_model or self.results_model.rowCount() == 0:
@@ -174,11 +259,12 @@ class SearchWidgetTree(QWidget):
         """Wird ausgelöst, wenn die Suche gestartet wird."""
         keyword = self.search_input.text().strip()
         if keyword:
-            logger.debug(f"Benutzer startet Suche nach: '{keyword}'")
+            strategy = self._get_selected_strategy()
+            logger.debug(f"Benutzer startet Suche nach: '{keyword}' mit Strategie: {strategy.value}")
 
-            # Extrahiere und speichere Suchbegriffe für Hervorhebung
-            search_terms = [term.strip() for term in keyword.split() if term.strip()]
-            self.set_search_terms(search_terms)
+            # Query parsen und Tokens für Hervorhebung übernehmen
+            q = parse_search_query(keyword)
+            self.set_search_terms(tokens_for_highlighting(q))
 
             # UI für den Ladezustand vorbereiten
             self.results_model.removeRows(0, self.results_model.rowCount())
@@ -186,12 +272,85 @@ class SearchWidgetTree(QWidget):
             self.status_label.show()
             self.results_tree.hide()
             # Signal senden, um die eigentliche Suche im Backend auszulösen
-            self.search_requested.emit(keyword)
+            self.search_requested.emit(keyword, strategy)
+
+    def set_completer_provider(self, provider: Callable[[str], List[str]]) -> None:
+        """Setzt einen Provider für Vorschläge und aktiviert einen QCompleter-Hook.
+
+        Der Provider wird mit dem aktuellen Text aufgerufen und muss eine Liste
+        von Vorschlägen (Strings) zurückgeben. Die Integration ist minimal-invasiv
+        und beeinflusst die bestehende Suchlogik nicht.
+
+        Args:
+            provider: Funktion str -> list[str].
+        """
+        try:
+            self._suggest_provider = provider
+            self._completer_model = QStringListModel([], self)
+            self._completer = QCompleter(self)
+            self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            self._completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            self._completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+            self._completer.setModel(self._completer_model)
+            self.search_input.setCompleter(self._completer)
+        except Exception as e:
+            logger.warning(f"QCompleter konnte nicht initialisiert werden: {e}")
+
+    @Slot(str)
+    def _on_query_changed(self, text: str) -> None:
+        """Parst die Eingabe live für bessere Hervorhebung und aktualisiert ggf. Vorschläge."""
+        try:
+            q = parse_search_query(text)
+            self.set_search_terms(tokens_for_highlighting(q))
+        except Exception:
+            # Fallback: naive Tokenisierung
+            search_terms = [t.strip() for t in (text or "").split() if t.strip()]
+            self.set_search_terms(search_terms)
+
+        # Completer-Update, wenn Provider gesetzt ist
+        if self._completer is not None and self._suggest_provider is not None:
+            try:
+                suggestions = self._suggest_provider(text) or []
+                if self._completer_model is not None:
+                    self._completer_model.setStringList(suggestions)
+            except Exception as e:
+                logger.warning(f"QCompleter konnte nicht aktualisiert werden: {e}")
+
+    @Slot()
+    def _show_info_window(self) -> None:
+        """Zeigt das Info-Fenster für Suchstrategien."""
+        if self.info_window is None:
+            self.info_window = SearchStrategyInfoWindow(self)
+            self.info_window.strategy_selected.connect(self._on_info_window_strategy_selected)
+
+        self.info_window.show_and_raise()
+
+        # Aktuelle Query-Daten an das Fenster weiterleiten
+        current_query = self.search_input.text()
+        current_strategy = self._get_selected_strategy()
+        self.info_window.update_query_preview(current_query, current_strategy)
+
+    @Slot()
+    def _update_info_window(self) -> None:
+        """Aktualisiert das Info-Fenster, falls es geöffnet ist."""
+        if self.info_window is not None and self.info_window.isVisible():
+            current_query = self.search_input.text()
+            current_strategy = self._get_selected_strategy()
+            self.info_window.update_query_preview(current_query, current_strategy)
+
+    @Slot(SearchStrategy)
+    def _on_info_window_strategy_selected(self, strategy: SearchStrategy) -> None:
+        """Wird ausgelöst, wenn eine Strategie im Info-Fenster ausgewählt wird."""
+        # Finde den Index der Strategie in der ComboBox
+        for i in range(self.strategy_combo.count()):
+            if self.strategy_combo.itemData(i) == strategy:
+                self.strategy_combo.setCurrentIndex(i)
+                break
 
     @Slot(list)
     def display_results(self, results: List[SearchResult]) -> None:
-        """Slot zum Anzeigen der Suchergebnisse in der TreeView."""
-        logger.debug(f"Zeige {len(results)} Suchergebnisse hierarchisch an.")
+        """Slot zum Anzeigen der Suchergebnisse in der TreeView mit BM25-Relevanz-Sortierung."""
+        logger.debug(f"Zeige {len(results)} Suchergebnisse hierarchisch an (mit Relevanz-Scores).")
         self.results_model.removeRows(0, self.results_model.rowCount())
         # Wichtig: Header neu setzen, da removeRows sie löschen kann
         self.results_model.setHorizontalHeaderLabels(["Video / Kapitel", "Kanal", "Zeitstempel"])
@@ -210,8 +369,17 @@ class SearchWidgetTree(QWidget):
         for res in results:
             videos[res.video_title].append(res)
 
-        # Schritt 2: Baumstruktur aufbauen
+        # Schritt 2: Videos nach bester Kapitel-Relevanz sortieren für bessere UX
+        video_relevance = {}
         for video_title, chapters in videos.items():
+            # Verwende die beste (höchste) Relevanz der Kapitel als Video-Relevanz
+            video_relevance[video_title] = max(chapter.relevance_score for chapter in chapters)
+
+        # Videos nach Relevanz sortiert verarbeiten
+        sorted_videos = sorted(videos.items(), key=lambda x: video_relevance[x[0]], reverse=True)
+
+        # Schritt 3: Baumstruktur aufbauen mit Relevanz-basierten Tooltips
+        for video_title, chapters in sorted_videos:
             # Hole Kanalinformationen vom ersten Kapitel (alle haben den gleichen Kanal)
             first_chapter = chapters[0]
             channel_display = first_chapter.channel_name
@@ -222,6 +390,8 @@ class SearchWidgetTree(QWidget):
             video_item = self._create_highlighted_item(video_title, "")
             video_item.setData(None, Qt.ItemDataRole.UserRole)  # Kein Link für Video-Item
             video_item.setIcon(Icons.get(Icons.VIDEO))
+            # Relevanz-Info als Tooltip hinzufügen
+            video_item.setToolTip(f"Beste Relevanz: {video_relevance[video_title]:.2f}")
 
             channel_item = QStandardItem(channel_display)
             channel_item.setEditable(False)
@@ -233,18 +403,33 @@ class SearchWidgetTree(QWidget):
 
             self.results_model.appendRow([video_item, channel_item, chapter_count_item])
 
+            # Kapitel nach Relevanz sortieren (beste zuerst)
+            chapters_sorted = sorted(chapters, key=lambda c: c.relevance_score, reverse=True)
+
             # Child-Items für jedes gefundene Kapitel direkt unter dem Video-Item erstellen
-            for chapter in chapters:
-                chapter_item = self._create_highlighted_item(chapter.chapter_title, "")
+            for chapter in chapters_sorted:
+                # Verwende highlighted_snippet falls verfügbar, sonst chapter_title
+                display_title = (
+                    self._snippet_to_plain_text(chapter.highlighted_snippet)
+                    if chapter.highlighted_snippet
+                    else chapter.chapter_title
+                )
+                chapter_item = self._create_highlighted_item(display_title, "")
                 chapter_item.setIcon(Icons.get(Icons.BOOK_OPEN))
                 # Link im Item speichern
                 chapter_item.setData(chapter.timestamp_url, Qt.ItemDataRole.UserRole)
+                # Erweiterte Tooltip-Info mit Relevanz
+                chapter_item.setToolTip(
+                    f"Relevanz: {chapter.relevance_score:.2f}\nKlicken um Video an dieser Stelle zu öffnen"
+                )
 
                 channel_child = QStandardItem("")
                 channel_child.setEditable(False)
                 channel_child.setData(chapter.timestamp_url, Qt.ItemDataRole.UserRole)
 
-                timestamp_item = QStandardItem(chapter.start_time_str)
+                # Zeitstempel mit Relevanz-Indikator
+                timestamp_display = f"{chapter.start_time_str} ({chapter.relevance_score:.1f})"
+                timestamp_item = QStandardItem(timestamp_display)
                 timestamp_item.setEditable(False)
                 timestamp_item.setData(chapter.timestamp_url, Qt.ItemDataRole.UserRole)
 
@@ -256,7 +441,8 @@ class SearchWidgetTree(QWidget):
         else:
             logger.debug(f"Viele Ergebnisse ({len(videos)} Videos) - TreeView nicht automatisch expandiert")
 
-        self.results_tree.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        # Sortierung nach Relevanz ist bereits erfolgt, daher keine alphabetische Sortierung
+        logger.debug("Ergebnisse nach BM25-Relevanz sortiert angezeigt")
 
     @Slot()
     def _on_result_double_clicked(self, index) -> None:

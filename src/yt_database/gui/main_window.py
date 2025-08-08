@@ -11,12 +11,11 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QToolBa
 
 from yt_database.config import logging_config  # noqa: F401
 from yt_database.config.settings import settings
-
 from yt_database.gui.components.font_manager import FontManager
 from yt_database.gui.components.signal_handler import SignalHandler
 from yt_database.gui.components.ui_manager import UiManager
+from yt_database.gui.components.worker_manager import WorkerManager
 from yt_database.gui.widgets.batch_transcription_control_widget import BatchTranscriptionWidget
-
 from yt_database.gui.widgets.config_dialog import ConfigDialog
 from yt_database.gui.widgets.dashboard_widget import DashboardWidget
 from yt_database.gui.widgets.database_table_view_widget import DatabaseOverviewWidget
@@ -25,11 +24,9 @@ from yt_database.gui.widgets.projects_tree_view_widget import ProjectTreeWidget
 from yt_database.gui.widgets.search_widget_table import SearchWidget
 from yt_database.gui.widgets.sidebar_widget import SidebarWidget
 from yt_database.gui.widgets.text_file_editor_widget import TextFileEditorWidget
-from yt_database.gui.components.worker_manager import WorkerManager
-from yt_database.services.factory_config import create_service_factory
 from yt_database.services.protocols import WebEngineWindowProtocol
 from yt_database.services.service_factory import ServiceFactory
-
+from yt_database.services.service_factory_config import create_service_factory
 
 if settings.debug:
     logger.remove()

@@ -23,6 +23,8 @@ def test_search_result_instantiation():
         start_time_str=start_time_str,
         channel_name=channel_name,
         channel_handle=channel_handle,
+        relevance_score=1.0,  # Default-Wert für Tests
+        highlighted_snippet="Test Snippet"
     )
 
     assert result.video_title == video_title

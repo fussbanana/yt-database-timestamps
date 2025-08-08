@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     """
 
     debug: bool = Field(default=False, description="Debug-Modus aktivieren")
+    database_url: str = Field(default="", description="Datenbank-URL")
+    api_key: str = Field(default="", description="API-Key für externe Dienste")
     test_video_id: str = Field(default="", description="Beispiel-Transcript-ID für Tests")
     prompt_type: Literal["youtube_comment", "detailed_database"] = Field(
         default="youtube_comment",
@@ -35,7 +37,7 @@ class Settings(BaseSettings):
     )
     yt_dlp_cookies_path: str = Field(default="./cookies.txt", description="Pfad zu den yt-dlp-Cookies")
     use_yt_dlp_cookies: bool = Field(
-        default=False,
+        default=True,
         description="Steuert, ob yt-dlp-Cookies verwendet werden (empfohlen: True für private/regionale Videos, False für öffentlich zugängliche Videos ohne Login)",
     )
     use_real_services: bool = Field(
@@ -80,12 +82,19 @@ class Settings(BaseSettings):
             yaml.safe_dump(self.model_dump(), f, allow_unicode=True, sort_keys=False)
 
 
+# --- NEUER CODE START ---
 
+# Die settings.py liegt in src/yt_database/config/
+# Wir gehen drei Ebenen hoch, um zum Projekt-Root zu gelangen (wo sich 'src' befindet)
 # src/yt_database/config -> src/yt_database -> src -> PROJECT_ROOT
 # Wenn Ihr Projekt-Root das 'src'-Verzeichnis selbst ist, ändern Sie es zu .parent.parent
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Definieren Sie die Pfade für die Styles
+# Diese werden nicht in der YAML gespeichert, sondern sind statische Pfade
 STYLES_PATH = PROJECT_ROOT / "yt_database" / "resources" / "styles"
 STYLESHEET_FILE = STYLES_PATH / "main.qss"
+# --- NEUER CODE ENDE ---
 
 
 settings = Settings.load_from_yaml()

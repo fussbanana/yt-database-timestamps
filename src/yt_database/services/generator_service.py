@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# src/yt_database/services/generator_service.py
 """
 generator_service.py
 
@@ -43,17 +43,16 @@ class GeneratorService(GeneratorServiceProtocol):
             project_manager (ProjectManagerProtocol): Projektmanagement-Service.
             transcript_service (TranscriptServiceProtocol): Transkriptions-Service.
             formatter_service (FormatterServiceProtocol): Formatierungs-Service.
-            file_service (FileServiceProtocol): Datei-Service.
+            file_service (FileServiceProtocol): File-Service.
 
         Example:
             >>> service = GeneratorService(pm, ts, fmt, fs)
         """
-        # Speichere die Service-Komponenten als Instanzvariablen
         self.project_manager = project_manager
         self.transcript_service = transcript_service
         self.formatter_service = formatter_service
         self.file_service = file_service
-        logger.debug("GeneratorService initialisiert.")
+        logger.info("GeneratorService initialisiert.")
 
     def run(self, channel_handle: str, video_id: str) -> None:
         """
@@ -68,10 +67,9 @@ class GeneratorService(GeneratorServiceProtocol):
 
         Workflow:
             1. Transkript und Metadaten abrufen und validieren
-            2. Metadaten mappen und vereinheitlichen
-            3. Transkript formatieren und speichern
-            4. Datenbankeintrag für das Transcript aktualisieren
-            5. Fehler und Sonderfälle loggen
+            2. Transkript speichern
+            3. Datenbankeintrag für das Transcript aktualisieren
+            4. Fehler und Sonderfälle loggen
 
         Raises:
             Exception: Bei Fehlern im Datenbank-Update oder der Verarbeitung.
@@ -80,21 +78,14 @@ class GeneratorService(GeneratorServiceProtocol):
             >>> service.run("@kanal", "abc123")
         """
         logger.debug(f"Starte Verarbeitung für Transcript: {video_id} (Channel: {channel_handle})")
-        # Hole das validierte Transkript- und Metadatenmodell vom Transkriptionsservice
         transcript_data = self.transcript_service.fetch_transcript(video_id)
-        # Mappe die Metadaten auf die Datenbankstruktur, um Konsistenz zu gewährleisten
-        # mapped_metadata = self.formatter_service.extract_metadata(transcript_data.model_dump())
-        # logger.debug(f"Gemappte Metadaten: {mapped_metadata}")
-        # Formatiere das Transkript für die spätere Speicherung als menschenlesbaren Text
-        # Ich übergebe das vollständige TranscriptData-Objekt an den Formatter
-        # Schreibe das formatierte Transkript und die Metadaten in die entsprechende Datei
+        # Das formatierte Transkript wird in eine Datei geschrieben
         self.file_service.write_transcript_file(transcript_data)
-        # Versuche, den Datenbankeintrag für das Transcript zu aktualisieren
         try:
+            # Es wird versucht, den Datenbankeintrag für das Transcript zu aktualisieren
             logger.debug(f"Versuche Datenbankeintrag für Transcript {video_id} zu aktualisieren.")
             self.project_manager.update_index(transcript_data)
             logger.debug(f"Datenbankeintrag für Transcript {video_id} erfolgreich erstellt/aktualisiert.")
         except Exception as exc:
             logger.debug(f"Fehler beim Datenbankeintrag für Transcript {video_id}: {exc}")
-        # Workflow abgeschlossen
         logger.debug(f"Verarbeitung für Transcript {video_id} erfolgreich abgeschlossen.")

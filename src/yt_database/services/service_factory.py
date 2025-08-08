@@ -37,7 +37,8 @@ from .protocols import (
 
 
 class ServiceFactory:
-    """Factory für die Erstellung und Verwaltung aller Service- und Worker-Instanzen.
+    """
+    Factory für die Erstellung und Verwaltung aller Service- und Worker-Instanzen.
 
     Args:
         **kwargs: Mapping von Klassennamen zu Implementierungen.
@@ -60,7 +61,7 @@ class ServiceFactory:
         self._instances = {}
         self._single_transcription_service: Optional[SingleTranscriptionServiceProtocol] = None
 
-    # --- Singleton Service Getters ---
+    # Singleton Service Getters
 
     def get_file_service(self) -> FileServiceProtocol:
         """Gibt die Singleton-Instanz des FileService zurück.
@@ -122,7 +123,7 @@ class ServiceFactory:
             )
         return self._instances["analysis_prompt_service"]
 
-    # --- Transient Service Getters (jedes Mal eine neue Instanz) ---
+    # Transient Service Getters (jedes Mal eine neue Instanz)
 
     def get_single_transcription_service(self) -> SingleTranscriptionServiceProtocol:
         """Gibt eine Instanz des SingleTranscriptionService zurück.
@@ -215,7 +216,7 @@ class ServiceFactory:
             self._instances["metadata_formatter"] = self._classes["metadata_formatter_class"]()
         return self._instances["metadata_formatter"]
 
-    # --- UI und Worker Getters ---
+    # UI und Worker Getters
 
     def get_web_automation_service(self, page: QWebEnginePage) -> WebAutomationServiceProtocol:
         """Gibt eine neue Instanz des WebAutomationService zurück.

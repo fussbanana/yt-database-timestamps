@@ -83,6 +83,43 @@ class SignalHandler(QObject):
         # Search
         self.main_window.search_widget.search_requested.connect(self._perform_search)
 
+        # Verbinde Suggestion Provider
+        self._setup_suggestion_provider()
+
+        # Config Dialog
+        self.main_window.config_dialog.settingsSaved.connect(self._on_settings_saved)
+        self.main_window.config_dialog.dialogCancelled.connect(self._on_config_dialog_cancelled)
+
+        # Toolbar Actions
+        self.main_window.settings_toolbar_action.triggered.connect(self._on_settings_toolbar_clicked)
+
+        # Explorer
+        self.main_window.explorer_widget.file_selected.connect(self._show_file_in_text_editor)
+        self.main_window.explorer_widget.folder_selected.connect(self._on_folder_selected)
+        self.main_window.explorer_widget.chapter_generation_requested.connect(
+            lambda path: self._start_chapter_generation_worker(path)
+        )
+
+    def _setup_suggestion_provider(self) -> None:
+        """Verbindet den SearchSuggestionProvider mit dem SearchWidgetTree."""
+        try:
+            project_manager = self.service_factory.get_project_manager_service()
+            suggestion_provider = project_manager.suggestion_provider
+
+            if suggestion_provider is not None:
+                # Lambda-Wrapper für die get_suggestions-Methode
+                provider_func = lambda query: [s.term for s in suggestion_provider.get_suggestions(query, limit=8)]
+
+                # Setze den Provider im TreeWidget
+                self.main_window.search_widget.tree_widget.set_completer_provider(provider_func)
+                logger.info("SearchSuggestionProvider erfolgreich mit SearchWidgetTree verbunden")
+            else:
+                logger.warning("SearchSuggestionProvider ist nicht verfügbar")
+
+        except Exception as e:
+            logger.error(f"Fehler beim Einrichten des SearchSuggestionProvider: {e}")
+            # Graceful fallback - keine Suggestions verfügbar
+
         # Config Dialog
         self.main_window.config_dialog.settingsSaved.connect(self._on_settings_saved)
         self.main_window.config_dialog.dialogCancelled.connect(self._on_config_dialog_cancelled)
@@ -426,8 +463,7 @@ class SignalHandler(QObject):
         try:
             if os.path.exists(file_path):
                 logger.info(f"File exists and would be opened: {file_path}")
-                # Es ist ein Widget im stack des MainWindow, das den Texteditor darstellt
-
+                # Setze den Text-Editor auf den Inhalt der Datei
                 self.main_window.text_file_editor_widget.load_file(file_path)
                 self.main_window.stack.setCurrentWidget(self.main_window.text_file_editor_widget)
 
@@ -479,13 +515,24 @@ class SignalHandler(QObject):
         self.main_window.stack.setCurrentIndex(1)  # Database Widget für Analyse
         logger.info("Channel analysis: Switching to database view for analysis features.")
 
-    @Slot(str)
-    def _perform_search(self, keyword: str):
-        """Performs a search using the ProjectManagerService."""
+    @Slot(str, object)  # object für SearchStrategy, um Typisierung-Probleme zu vermeiden
+    def _perform_search(self, keyword: str, strategy=None):
+        """Performs a search using the ProjectManagerService with optional strategy."""
         try:
-            logger.info(f"SearchWidget: Performing search for keyword: {keyword}")
+            logger.info(f"SearchWidget: Performing search for keyword: '{keyword}'")
             project_manager = self.service_factory.get_project_manager_service()
-            results = project_manager.search_chapters(keyword)
+
+            # Strategy-Parameter nur nutzen, wenn verfügbar und korrekt
+            if strategy is not None:
+                try:
+                    results = project_manager.search_chapters(keyword, strategy=strategy)
+                    logger.info(f"SearchWidget: Used strategy: {getattr(strategy, 'value', str(strategy))}")
+                except (TypeError, AttributeError):
+                    # Fallback: alte Methode ohne Strategy
+                    results = project_manager.search_chapters(keyword)
+                    logger.warning("SearchWidget: Fallback to search without strategy")
+            else:
+                results = project_manager.search_chapters(keyword)
 
             logger.info(f"SearchWidget: Found {len(results)} results for '{keyword}'")
             self.main_window.search_widget.display_results(results)
@@ -613,3 +660,41 @@ class SignalHandler(QObject):
     def _on_config_dialog_cancelled(self) -> None:
         """Handle when config dialog is cancelled."""
         logger.debug("Config dialog cancelled")
+
+    def _on_close_worker_requested(self) -> None:
+        """Handle request to stop all running workers.
+
+        Zeigt eine Bestätigung an und stoppt alle laufenden Worker bei Bestätigung.
+        """
+        from PySide6.QtWidgets import QMessageBox
+
+        # Prüfe, ob überhaupt Worker laufen
+        running_tasks_info = self.worker_manager.get_running_tasks_info()
+        running_count = len([task for task in running_tasks_info if task["is_running"]])
+
+        if running_count == 0:
+            logger.info("Keine laufenden Worker zu stoppen.")
+            self.main_window.statusBar().showMessage("Keine laufenden Worker gefunden.", 3000)
+            return
+
+        # Bestätigungsdialog anzeigen
+        task_names = [task["name"] for task in running_tasks_info if task["is_running"]]
+        task_list = "\n".join(f"• {name}" for name in task_names)
+
+        reply = QMessageBox.question(
+            self.main_window,
+            "Worker beenden",
+            f"Es sind {running_count} Worker aktiv:\n\n{task_list}\n\n"
+            "Möchtest du alle laufenden Worker wirklich beenden?\n"
+            "Laufende Aufgaben werden abgebrochen und können Daten verlieren.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            logger.info(f"Benutzer bestätigt: Stoppe {running_count} laufende Worker.")
+            self.worker_manager.stop_all_workers()
+            self.main_window.statusBar().showMessage(f"{running_count} Worker wurden gestoppt.", 5000)
+        else:
+            logger.debug("Benutzer hat Worker-Stopp abgebrochen.")
+            self.main_window.statusBar().showMessage("Worker-Stopp abgebrochen.", 3000)

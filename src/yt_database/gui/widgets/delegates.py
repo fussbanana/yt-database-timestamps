@@ -5,9 +5,10 @@ Enthält einen RichTextHighlightDelegate, der Suchbegriffe im Text per HTML
 farblich hervorhebt und mittels QTextDocument rendert.
 """
 
-from typing import Callable, List
 import html
 import re
+from typing import Callable, List
+
 from PySide6.QtCore import QRect, QRectF, Qt
 from PySide6.QtGui import QTextDocument
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate

@@ -154,13 +154,13 @@ class UiManager:
         self.main_window.toolbar.addAction(self.main_window.settings_toolbar_action)
 
     def _setup_statusbar(self) -> None:
-        """ Initialisiert die Statusbar."""
+        """Initialisiert die Statusbar."""
         logger.debug("UiManager: Initialisiert die Statusbar.")
         self.main_window.statusBar().showMessage("Bereit.")
 
     # <<< NEU >>> Diese Methode erstellt und aktiviert den StyleManager
     def _setup_style_manager(self) -> None:
-        """ Initialisiert den StyleManager für das initiale Laden und das Live-Stylesheet-Reloading."""
+        """Initialisiert den StyleManager für das initiale Laden und das Live-Stylesheet-Reloading."""
         logger.debug("UiManager: Initialisiert den StyleManager.")
         # Ich erstelle eine Instanz des StyleManagers.
         # WICHTIG: Wir speichern eine Referenz in self.style_manager, damit das Objekt nicht

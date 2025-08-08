@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# src/yt_database/services/formatter_service.py
 """
 FormatterService
 

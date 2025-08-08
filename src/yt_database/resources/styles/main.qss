@@ -2090,7 +2090,7 @@ QComboBox::down-arrow {
 }
 
 QComboBox QAbstractItemView {
-  background-color: #41454d;
+  background-color: #363b43;
   color: #f0f0f0;
   border: 1px solid #4b4f57;
   border-radius: 4px;

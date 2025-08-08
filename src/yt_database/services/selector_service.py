@@ -72,7 +72,7 @@ class AddSourceButtonSelector(AddSourceButtonSelectorProtocol):
         BUTTON (str): CSS-Selektor für den Button.
     """
 
-    # CSS-Selektor für den Button
+    # CSS-Selektor für den Button Quellen hinzufügen
     BUTTON: str = 'button[aria-label="Quelle hinzufügen"]'
 
 
@@ -84,7 +84,7 @@ class AddSourceDialogSelector(AddSourceDialogSelectorProtocol):
         ICON_NAME (str): Name des Icons.
     """
 
-    # Name des Icons im Dialog
+    # Name des Icons im Dialog zum Hinzufügen von Quellen
     ICON_NAME: str = "content_paste"
 
 
@@ -96,7 +96,7 @@ class PasteTextDialogSelector(PasteTextDialogSelectorProtocol):
         TEXTAREA_SELECTOR (str): CSS-Selektor für das Textfeld.
     """
 
-    # CSS-Selektor für das Textfeld
+    # CSS-Selektor für das Textfeld im Dialog zum Quellen hinzufügen
     TEXTAREA_SELECTOR: str = 'textarea[matinput][formcontrolname="text"]'
 
 

@@ -35,7 +35,9 @@ def sample_search_results():
             timestamp_url="https://youtu.be/example1?t=120s",
             start_time_str="00:02:00",
             channel_name="Python Learning",
-            channel_handle="@pythonlearning"
+            channel_handle="@pythonlearning",
+            relevance_score=2.5,
+            highlighted_snippet="<mark>List</mark> Comprehensions und Generators"
         ),
         SearchResult(
             video_title="Python Tutorial: Advanced Features",
@@ -43,7 +45,9 @@ def sample_search_results():
             timestamp_url="https://youtu.be/example1?t=450s",
             start_time_str="00:07:30",
             channel_name="Python Learning",
-            channel_handle="@pythonlearning"
+            channel_handle="@pythonlearning",
+            relevance_score=1.8,
+            highlighted_snippet="<mark>Decorators</mark> und Context Managers"
         ),
         SearchResult(
             video_title="Web Development with Django",
@@ -51,7 +55,9 @@ def sample_search_results():
             timestamp_url="https://youtu.be/example2?t=350s",
             start_time_str="00:05:50",
             channel_name="Django Tutorials",
-            channel_handle="@djangotutorials"
+            channel_handle="@djangotutorials",
+            relevance_score=3.1,
+            highlighted_snippet="<mark>Model</mark>-View-Template Pattern"
         ),
     ]
 
@@ -96,13 +102,13 @@ class TestSearchWidgetTree:
         model = search_widget_tree.results_model
         assert model.rowCount() == 2
 
-        # Erstes Video sollte 2 Kapitel haben
+        # Nach BM25-Sortierung: Erstes Video (höchste Relevanz) sollte 1 Kapitel haben
         video_item = model.item(0, 0)
-        assert video_item.rowCount() == 2
-
-        # Zweites Video sollte 1 Kapitel haben
-        video_item = model.item(1, 0)
         assert video_item.rowCount() == 1
+
+        # Zweites Video sollte 2 Kapitel haben
+        video_item = model.item(1, 0)
+        assert video_item.rowCount() == 2
 
     def test_video_items_have_no_links(self, search_widget_tree, sample_search_results):
         """Test, dass Video-Items keine Links haben."""
@@ -159,12 +165,14 @@ class TestSearchWidgetTree:
         many_results = []
         for i in range(7):
             many_results.append(SearchResult(
-                video_title=f"Video {i}",
-                chapter_title=f"Kapitel {i}",
-                timestamp_url=f"https://youtu.be/example{i}?t=120s",
-                start_time_str="00:02:00",
-                channel_name=f"Channel {i}",
-                channel_handle=f"@channel{i}"
+                video_title=f"Test Video {i+1}",
+                chapter_title=f"Test Kapitel {i+1}",
+                timestamp_url=f"https://youtube.com/watch?v=test{i+1}&t=123s",
+                start_time_str="02:03",
+                channel_name="Test Channel",
+                channel_handle="@testchannel",
+                relevance_score=2.5,
+                highlighted_snippet=f"<mark>Test</mark> Kapitel {i+1}"
             ))
 
         search_widget_tree.display_results(many_results)

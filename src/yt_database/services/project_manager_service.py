@@ -1,3 +1,4 @@
+# src/yt_database/services/project_manager_service.py
 """
 Service zur Verwaltung und Synchronisation von YouTube-Projekten und Metadaten über eine SQLite-Datenbank.
 
@@ -7,7 +8,6 @@ Dieser Service kapselt alle Operationen rund um Kanäle, Videos und Transkripte:
 - Verwaltung der Projektstruktur und Dateipfade
 - Schreiben von Transkripten mit Status in Markdown
 
-Die Datei ist vollständig nach Google-Style dokumentiert und enthält strategische Debug-Logs sowie Inline-Kommentare für alle nicht-trivialen Zeilen.
 """
 
 import os
@@ -20,6 +20,9 @@ from yt_database.config.settings import Settings
 from yt_database.database import Channel, Chapter, Transcript, db
 from yt_database.models.models import ChapterEntry, TranscriptData
 from yt_database.models.search_models import SearchResult
+from yt_database.models.search_strategy import SearchStrategy
+from yt_database.search.synonym_expander import SynonymExpander
+from yt_database.search.suggestion_provider import SearchSuggestionProvider
 from yt_database.services.protocols import ProjectManagerProtocol
 from yt_database.utils.transcript_for_video_id_util import get_transcript_path_for_video_id
 from yt_database.utils.utils import (
@@ -51,7 +54,24 @@ class ProjectManagerService(ProjectManagerProtocol):
         """
         self.settings = settings
         self.file_service = file_service
-        logger.debug("ProjectManagerService (SQLite-Backend, Pydantic Settings) initialisiert.")
+
+        # Initialisiere Erweiterungen für Phase 4
+        self.synonym_expander = SynonymExpander()
+
+        # Verwende denselben DB-Pfad wie die Hauptanwendung
+        import os
+
+        db_path = os.path.join(os.getcwd(), "yt_database.db")
+        self.suggestion_provider = SearchSuggestionProvider(db_path)
+
+        # Phase 5: Semantische Suche mit AI-Embeddings
+        from yt_database.search.semantic_search_service import SemanticSearchService
+
+        self.semantic_search_service = SemanticSearchService(db_path)
+
+        logger.debug(
+            "ProjectManagerService (SQLite-Backend, Pydantic Settings) mit Phase 4+5 Erweiterungen initialisiert."
+        )
 
     def get_all_channels(self) -> List[Channel]:
         """
@@ -483,58 +503,284 @@ class ProjectManagerService(ProjectManagerProtocol):
                 error_reason=f"Video nicht in Datenbank gefunden: {e}",
             )
 
-    def search_chapters(self, query: str, limit: int = 50) -> List[SearchResult]:
+    def search_chapters(
+        self, query: str, strategy: SearchStrategy = SearchStrategy.AUTO, limit: int = 50
+    ) -> List[SearchResult]:
         """
-        Durchsucht Kapitel-Titel mit FTS5 und gibt strukturierte Ergebnisse zurück.
+        Erweiterte Kapitel-Suche mit 7 Strategien: FTS5 + AI-Semantik + Hybrid-Suche.
 
         Args:
-            query (str): Das zu suchende Stichwort. FTS5-Syntax wird unterstützt.
+            query (str): Das zu suchende Stichwort.
+            strategy (SearchStrategy): Die anzuwendende Suchstrategie (inkl. SEMANTIC, HYBRID).
             limit (int): Maximale Anzahl der Ergebnisse.
 
         Returns:
-            List[SearchResult]: Eine Liste von typsicheren Suchergebnis-Objekten.
+            List[SearchResult]: Eine Liste von Suchergebnis-Objekten mit Relevanz-Scoring.
         """
-        logger.info(f"Suche nach Kapiteln mit Stichwort: '{query}'")
+        logger.info(f"Suche nach Kapiteln: '{query}' (Strategie: {strategy.value})")
+
+        if not query.strip():
+            return []
+
         try:
-            # FTS5-Suche durchführen und mit Chapter- und Transcript-Daten verknüpfen
-            sql = """
-                SELECT
-                    c.title as chapter_title,
-                    c.start_seconds,
-                    t.title as video_title,
-                    t.video_url,
-                    ch.name as channel_name,
-                    ch.handle as channel_handle,
-                    c.chapter_id
-                FROM chapter_fts cf
-                JOIN chapter c ON cf.chapter_id = c.chapter_id
-                JOIN transcript t ON c.transcript_id = t.video_id
-                JOIN channel ch ON t.channel_id = ch.channel_id
-                WHERE chapter_fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-            """
-            cursor = db.execute_sql(sql, (query, limit))
-            results = []
-            for row in cursor.fetchall():
-                chapter_title, start_seconds, video_title, video_url, channel_name, channel_handle, chapter_id = row
-                timestamp_url = f"{video_url}&t={start_seconds}s"
-                start_time_str = self._seconds_to_hms(start_seconds)
-                results.append(
-                    SearchResult(
+            # Route zu der entsprechenden Suchmethode basierend auf Strategie
+            if strategy == SearchStrategy.SEMANTIC:
+                return self._semantic_search(query, limit)
+            elif strategy == SearchStrategy.HYBRID:
+                return self._hybrid_search(query, limit)
+            else:
+                # Alle anderen Strategien nutzen FTS5 mit Synonym-Expansion (Phase 4)
+                return self._keyword_search(query, strategy, limit)
+
+        except Exception as e:
+            logger.error(f"Fehler bei der Kapitel-Suche: {e}")
+            return []
+
+    def _semantic_search(self, query: str, limit: int) -> List[SearchResult]:
+        """Führt reine semantische Suche mit AI-Embeddings durch."""
+        logger.debug(f"Starte semantische Suche für: '{query}'")
+
+        # Stelle sicher, dass Vector Database initialisiert ist
+        self.semantic_search_service.initialize_vector_database()
+
+        # Führe semantische Suche durch
+        return self.semantic_search_service.semantic_search(query, limit)
+
+    def _hybrid_search(self, query: str, limit: int) -> List[SearchResult]:
+        """Kombiniert semantische und keyword-basierte Suche für optimale Ergebnisse."""
+        logger.debug(f"Starte Hybrid-Suche für: '{query}'")
+
+        # 60% der Ergebnisse von semantischer Suche
+        semantic_limit = int(limit * 0.6)
+        semantic_results = self._semantic_search(query, semantic_limit)
+
+        # 40% der Ergebnisse von keyword-basierter Suche
+        keyword_limit = limit - len(semantic_results)
+        keyword_results = self._keyword_search(query, SearchStrategy.AUTO, keyword_limit)
+
+        # Kombiniere Ergebnisse
+        combined_results = []
+
+        # Semantische Ergebnisse: Gewichtung erhöhen
+        for result in semantic_results:
+            result.relevance_score *= 1.2  # 20% Boost für semantische Ergebnisse
+            combined_results.append(result)
+
+        # Keyword-Ergebnisse hinzufügen (einfache Kombination ohne Duplikat-Check für jetzt)
+        combined_results.extend(keyword_results)
+
+        # Sortiere nach kombiniertem Relevanz-Score
+        combined_results.sort(key=lambda x: x.relevance_score, reverse=True)
+
+        logger.info(
+            f"Hybrid-Suche: {len(semantic_results)} semantische + {len(keyword_results)} keyword = {len(combined_results)} total"
+        )
+        return combined_results[:limit]
+
+    def _keyword_search(self, query: str, strategy: SearchStrategy, limit: int) -> List[SearchResult]:
+        """
+        FTS5-basierte Keyword-Suche mit Synonym-Expansion (Phase 4 Logik).
+        """
+        logger.debug(f"Starte Keyword-Suche für: '{query}' mit Strategie: {strategy.value}")
+
+        # FTS5-Query basierend auf gewählter Strategie erstellen (mit Synonym-Expansion)
+        fts_query = self._build_enhanced_fts_query(query, strategy)
+        logger.debug(f"Erweiterte FTS5-Query für Strategie {strategy.value}: {fts_query}")
+
+        # FTS5-Suche mit BM25-Ranking und Snippet-Highlighting
+        sql = """
+            SELECT
+                c.title as chapter_title,
+                c.id as chapter_id,
+                c.start_time,
+                c.end_time,
+                c.video_id,
+                t.title as video_title,
+                t.channel_id,
+                ch.name as channel_name,
+                ch.url as channel_url,
+                ch.handle as channel_handle,
+                bm25(chapter_fts) as relevance_score,
+                snippet(chapter_fts, 1, '<mark>', '</mark>', '...', 32) as highlighted_snippet
+            FROM chapter_fts cf
+            JOIN chapters c ON c.id = cf.chapter_id
+            JOIN transcripts t ON t.video_id = c.video_id
+            JOIN channels ch ON ch.id = t.channel_id
+            WHERE chapter_fts MATCH ?
+            ORDER BY relevance_score DESC
+            LIMIT ?
+        """
+
+        import sqlite3
+        import os
+        import re
+
+        db_path = os.path.join(os.getcwd(), "yt_database.db")
+
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, (fts_query, limit))
+                rows = cursor.fetchall()
+
+                results = []
+                for row in rows:
+                    chapter_title = row[0]
+                    chapter_id = row[1]
+                    start_time = row[2]
+                    end_time = row[3]
+                    video_id = row[4]
+                    video_title = row[5]
+                    channel_name = row[7]
+                    channel_handle = row[9] or ""
+                    relevance_score = row[10]
+                    highlighted_snippet = row[11]
+
+                    # HTML-Tags aus Snippet entfernen
+                    clean_snippet = re.sub(r"<[^>]+>", "", highlighted_snippet)
+
+                    # Timestamp URL erstellen
+                    timestamp_url = f"https://www.youtube.com/watch?v={video_id}&t={start_time}s"
+
+                    # Start-Zeit als String formatieren
+                    minutes = start_time // 60
+                    seconds = start_time % 60
+                    start_time_str = f"{minutes:02d}:{seconds:02d}"
+
+                    result = SearchResult(
                         video_title=video_title,
                         channel_name=channel_name,
                         channel_handle=channel_handle,
                         chapter_title=chapter_title,
                         timestamp_url=timestamp_url,
                         start_time_str=start_time_str,
+                        relevance_score=relevance_score,
+                        highlighted_snippet=clean_snippet,
                     )
-                )
-            logger.info(f"{len(results)} Ergebnisse für '{query}' gefunden.")
-            return results
+                    results.append(result)
+
+                logger.info(f"Keyword-Suche: {len(results)} Kapitel gefunden")
+                return results
+
         except Exception as e:
-            logger.error(f"Fehler bei der Kapitel-Suche: {e}")
+            logger.error(f"Fehler bei der Keyword-Suche: {e}")
             return []
+
+    def _build_enhanced_fts_query(self, query: str, strategy: SearchStrategy) -> str:
+        """
+        Erstellt eine erweiterte FTS5-Query mit Synonym-Expansion.
+
+        Args:
+            query: Rohe Benutzereingabe
+            strategy: Gewählte Suchstrategie
+
+        Returns:
+            FTS5-kompatible Query-String mit Synonymen
+        """
+        if not query or not query.strip():
+            return query
+
+        # Bereinigung: Mehrfache Leerzeichen entfernen, trimmen
+        cleaned_query = " ".join(query.strip().split())
+
+        # Wörter extrahieren für Synonym-Expansion
+        words = cleaned_query.split()
+
+        # Erweiterte Query mit Synonymen erstellen
+        enhanced_query = self.synonym_expander.build_expanded_fts_query(words, strategy)
+
+        logger.debug(f"Ursprüngliche Wörter: {words}")
+        logger.debug(f"Erweiterte Query: {enhanced_query}")
+
+        return enhanced_query
+
+    def _build_fts_query(self, query: str, strategy: SearchStrategy) -> str:
+        """
+        Erstellt eine FTS5-Query basierend auf der gewählten Suchstrategie.
+
+        Args:
+            query: Rohe Benutzereingabe
+            strategy: Gewählte Suchstrategie
+
+        Returns:
+            FTS5-kompatible Query-String
+        """
+        if not query or not query.strip():
+            return query
+
+        # Bereinigung: Mehrfache Leerzeichen entfernen, trimmen
+        cleaned_query = " ".join(query.strip().split())
+
+        # Verwende strategy.value für robuste Vergleiche (Enum-Instance-Probleme vermeiden)
+        strategy_value = strategy.value if hasattr(strategy, "value") else str(strategy)
+
+        if strategy_value == "exact":
+            # Gesamte Eingabe als exakte Phrase behandeln
+            return f'"{cleaned_query}"'
+
+        elif strategy_value == "all":
+            # Alle Wörter müssen vorkommen (AND-Verknüpfung)
+            words = cleaned_query.split()
+            if len(words) <= 1:
+                return cleaned_query
+            return " AND ".join(f"{word}*" for word in words)
+
+        elif strategy_value == "any":
+            # Mindestens ein Wort muss vorkommen (OR-Verknüpfung)
+            words = cleaned_query.split()
+            if len(words) <= 1:
+                return cleaned_query
+            return " OR ".join(f"{word}*" for word in words)
+
+        elif strategy_value == "fuzzy":
+            # Unscharfe Suche mit Wildcards
+            words = cleaned_query.split()
+            fuzzy_terms = []
+            for word in words:
+                if len(word) >= 3:  # Nur längere Wörter für Prefix-Matching
+                    fuzzy_terms.append(f"{word}*")
+                else:
+                    fuzzy_terms.append(word)
+            return " OR ".join(fuzzy_terms)
+
+        elif strategy_value == "auto":
+            # Intelligente Auswahl basierend auf Query-Charakteristika
+            return self._build_auto_strategy_query(cleaned_query)
+
+        else:
+            # Fallback: Rohe Query zurückgeben
+            logger.warning(f"Unbekannte Suchstrategie: {strategy} (value: {strategy_value})")
+            return cleaned_query
+
+    def _build_auto_strategy_query(self, query: str) -> str:
+        """
+        Intelligente Strategie-Auswahl basierend auf Query-Eigenschaften.
+
+        Heuristiken:
+        - Anführungszeichen → Exakte Phrase
+        - 2-3 häufige Wörter → AND-Verknüpfung
+        - Viele Wörter (>3) → OR für bessere Abdeckung
+        - Einzelwort → Prefix-Matching
+        """
+        # Anführungszeichen → Nutzer will exakte Phrase
+        if '"' in query:
+            return f'"{query.replace('"', '')}"'
+
+        words = query.split()
+
+        if len(words) == 1:
+            # Einzelwort: Prefix-Matching für bessere Trefferrate
+            return f"{words[0]}*"
+        elif len(words) == 2:
+            # Zwei Wörter: Versuche erst exakte Phrase, dann AND
+            # Implementierung: FTS5 mit (phrase OR and_terms)
+            return f'"{query}" OR ({words[0]}* AND {words[1]}*)'
+        elif len(words) <= 3:
+            # 3 Wörter: AND-Verknüpfung (präzise)
+            return " AND ".join(f"{word}*" for word in words)
+        else:
+            # Viele Wörter: OR für bessere Abdeckung
+            return " OR ".join(f"{word}*" for word in words)
 
     def _seconds_to_hms(self, seconds: int) -> str:
         """
@@ -609,6 +855,7 @@ class ProjectManagerService(ProjectManagerProtocol):
             channel_name = channel.name
 
             # Löschung durchführen (CASCADE löscht automatisch Videos und Kapitel)
+            # Wie bei der Video-Löschung
             channel.delete_instance(recursive=True)
 
             logger.info(
@@ -654,6 +901,7 @@ class ProjectManagerService(ProjectManagerProtocol):
                 return {"success": False, "error": "Keine Kapitel zum Löschen gefunden."}
 
             # Löschung durchführen
+            # Wie bei der Video-Löschung und Kapitel-Löschung
             delete_query = Chapter.delete().where(Chapter.transcript == video)
             if chapter_type:
                 delete_query = delete_query.where(Chapter.chapter_type == chapter_type)

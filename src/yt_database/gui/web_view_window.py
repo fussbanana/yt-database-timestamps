@@ -1,10 +1,20 @@
 """
-web_view_window.py
-=================
+Dieses Modul stellt das WebEngineWindow für die Anzeige und Automatisierung von Webinhalten im YouTube-Datenbankprojekt bereit.
+Hauptfunktionen:
+- Persistente WebView mit Automatisierungsfunktionen
+- JavaScript-Bridge für die bidirektionale Kommunikation zwischen Python und Webseite
+- Automatisierte Workflows für Transkript-Upload und Prompt-Verarbeitung
 
-Dateikopf-Kommentar:
---------------------
-Dieses Modul implementiert das WebEngineWindow für die Anzeige und Automatisierung von Webinhalten im YouTube-Datenbankprojekt. Es bietet eine persistente WebView mit Automatisierungsfunktionen, eine JavaScript-Bridge für die Kommunikation mit der Webseite und einen Workflow zur automatisierten Verarbeitung von Transkripten und Prompts.
+Enthaltene Klassen:
+- JsBridge: Bridge für die Kommunikation zwischen Python und JavaScript
+- WebEngineWindow: Hauptfenster mit WebView, Automatisierungs- und UI-Logik
+
+Wichtige Methoden:
+- Automatisierungssequenzen für Upload und Prompt-Insertion
+- Signal- und Slot-Management für UI und Automation
+- Persistente Speicherung von Fenstergeometrie und Web-Profil
+
+Alle Klassen und Methoden sind mit Google-Style-Docstrings dokumentiert.
 """
 
 import os
@@ -25,6 +35,12 @@ from yt_database.services.service_factory import ServiceFactory
 class JsBridge(QObject):
     """
     Bridge-Klasse für die Kommunikation zwischen Python und JavaScript.
+
+    Ermöglicht das Empfangen und Senden von generischen Antworten sowie die Bestätigung der Bridge-Bereitschaft.
+
+    Attributes:
+        generic_response_received (Signal): Signal für generische Antworten von JS.
+        bridge_is_ready (Signal): Signal, wenn die Bridge bereit ist.
     """
 
     generic_response_received = Signal(dict)
@@ -32,10 +48,19 @@ class JsBridge(QObject):
 
     @Slot(dict)
     def on_generic_response(self, response: dict) -> None:
+        """
+        Empfängt eine generische Antwort von JavaScript und leitet sie als Signal weiter.
+
+        Args:
+            response (dict): Die empfangene Antwort von JS.
+        """
         self.generic_response_received.emit(response)
 
     @Slot()
     def confirm_bridge_readiness(self) -> None:
+        """
+        Bestätigt die Bereitschaft der JavaScript-Bridge und sendet ein Signal.
+        """
         logger.success("JavaScript-Bridge-Verbindung von JS nach Python bestätigt!")
         self.bridge_is_ready.emit()
 
@@ -43,6 +68,13 @@ class JsBridge(QObject):
 class WebEngineWindow(QMainWindow):
     """
     Fenster zur Anzeige von Webinhalten mit Automatisierungs- und Kommunikationsfunktionen.
+
+    Stellt die UI, Automatisierungssequenzen und die Kommunikation mit der Webseite bereit.
+
+    Attributes:
+        chapters_extracted_signal (Signal): Signal für extrahierte Kapitel.
+        automation_sequence_finished (Signal): Signal bei Abschluss einer Automatisierungssequenz.
+        automation_sequence_failed (Signal): Signal bei Fehler in der Automatisierung.
     """
 
     chapters_extracted_signal = Signal(str)
@@ -52,6 +84,10 @@ class WebEngineWindow(QMainWindow):
     def __init__(self, service_factory: "ServiceFactory", parent: Optional[QWidget] = None) -> None:
         """
         Initialisiert das WebEngineWindow mit allen Services und der UI.
+
+        Args:
+            service_factory (ServiceFactory): Fabrik zur Erzeugung der benötigten Services.
+            parent (Optional[QWidget]): Optionales Eltern-Widget.
         """
         super().__init__(parent)
 
@@ -65,7 +101,9 @@ class WebEngineWindow(QMainWindow):
         self.set_url(settings.webview_url)
 
     def _setup_ui(self) -> None:
-        """Ruft die UI-Setup-Methoden in der richtigen Reihenfolge auf."""
+        """
+        Initialisiert die UI-Komponenten und ruft die Setup-Methoden in der richtigen Reihenfolge auf.
+        """
         logger.debug("Initialisiere UI-Komponenten.")
         self._setup_widgets()
         self._setup_layouts()
@@ -74,7 +112,9 @@ class WebEngineWindow(QMainWindow):
         self.automation_service = self._service_factory.get_web_automation_service(page=self.web_view.page())
 
     def _setup_widgets(self) -> None:
-        """Initialisiert alle UI-Komponenten und konfiguriert ihre statischen Eigenschaften."""
+        """
+        Initialisiert alle UI-Komponenten und konfiguriert ihre statischen Eigenschaften.
+        """
         self.setWindowTitle("AI Assistant - NotebookLM")
         self.statusBar().showMessage("Bereit.")
 
@@ -123,14 +163,19 @@ class WebEngineWindow(QMainWindow):
         self._pending_sequence: Optional[tuple[list, str]] = None
 
     def _setup_services(self, service_factory: "ServiceFactory") -> None:
-        """Initialisiert abhängige Dienste mithilfe der ServiceFactory."""
+        """
+        Initialisiert abhängige Dienste mithilfe der ServiceFactory.
+
+        Args:
+            service_factory (ServiceFactory): Fabrik zur Erzeugung der benötigten Services.
+        """
         logger.debug("Initialisiere abhängige Services.")
         self._service_factory = service_factory
         self._file_service = service_factory.get_file_service()
         self._analysis_prompt_service = service_factory.get_analysis_prompt_service()
 
     def _create_web_view_with_profile(self) -> None:
-        """Erstellt ein persistentes Web-Profil und die zugehörige QWebEngineView."""
+        """Erstellt ein persistentes Web-Profil und die zugehörige QWebEngineView"""
         data_path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
         if not data_path:
             data_path = os.path.join(os.path.expanduser("~"), ".YTDatabaseMissionControl")
@@ -160,24 +205,41 @@ class WebEngineWindow(QMainWindow):
             self._analysis_prompt = ""
 
     def update_analysis_prompt(self, prompt_text: str) -> None:
-        """Aktualisiert den Analyse-Prompt zur Laufzeit."""
+        """
+        Aktualisiert den Analyse-Prompt zur Laufzeit.
+
+        Args:
+            prompt_text (str): Neuer Prompt-Text.
+        """
         logger.debug(f"Aktualisiere Analyse-Prompt: {prompt_text[:100]}...")
         self._analysis_prompt = prompt_text
 
     def set_url(self, url: str) -> None:
-        """Setzt die URL im WebView."""
+        """
+        Setzt die URL im WebView.
+
+        Args:
+            url (str): Die zu ladende URL.
+        """
         self.web_view.setUrl(QUrl(url))
 
     @Slot(str)
     def handle_new_transcript(self, transcript_text: str) -> None:
-        """Startet den Workflow: Transkript hochladen, warten, Prompt senden."""
+        """
+        Startet den Workflow: Transkript hochladen, warten, Prompt senden.
+
+        Args:
+            transcript_text (str): Das zu verarbeitende Transkript.
+        """
         logger.debug("handle_new_transcript: Starte Upload- und Warte-Sequenz.")
         self._pending_prompt = self._get_analysis_prompt()
         self._pending_transcript = transcript_text
         self._start_upload_sequence()
 
     def _start_upload_sequence(self) -> None:
-        """Erstellt und startet die Sequenz zum Hochladen des Transkripts."""
+        """
+        Erstellt und startet die Sequenz zum Hochladen des Transkripts.
+        """
         selectors = self.automation_service.selectors
         upload_sequence = [
             self._create_wait_for_element_with_text_and_click_step(
@@ -221,7 +283,9 @@ class WebEngineWindow(QMainWindow):
         self._execute_sequence(upload_sequence, "upload_transcript")
 
     def _start_prompt_sequence(self) -> None:
-        """Erstellt und startet die Sequenz zum Einfügen des Analyse-Prompts."""
+        """
+        Erstellt und startet die Sequenz zum Einfügen des Analyse-Prompts.
+        """
         logger.debug("Starte Prompt-Einfüge-Sequenz.")
         self._pending_prompt = self._get_analysis_prompt()
         selectors = self.automation_service.selectors
@@ -242,7 +306,13 @@ class WebEngineWindow(QMainWindow):
         self._execute_sequence(prompt_sequence, "prompt_insertion")
 
     def _execute_sequence(self, sequence: list[Callable[..., Any]], sequence_name: str) -> None:
-        """Führt eine Liste von Automatisierungsfunktionen nacheinander aus."""
+        """
+        Führt eine Liste von Automatisierungsfunktionen nacheinander aus.
+
+        Args:
+            sequence (list[Callable[..., Any]]): Liste der auszuführenden Schritte.
+            sequence_name (str): Name der Sequenz.
+        """
         if not self._automation_ready:
             logger.warning(
                 f"Automatisierung für '{sequence_name}' angefordert, aber Seite nicht bereit. Sequenz wird aufgeschoben."
@@ -255,7 +325,9 @@ class WebEngineWindow(QMainWindow):
         self._execute_next_step()
 
     def _execute_next_step(self) -> None:
-        """Führt den nächsten Schritt in der aktuellen Sequenz aus."""
+        """
+        Führt den nächsten Schritt in der aktuellen Sequenz aus.
+        """
         if not self._current_sequence:
             logger.debug(f"Sequenz '{self._current_sequence_name}' erfolgreich abgeschlossen.")
             self.automation_sequence_finished.emit(self._current_sequence_name)
@@ -284,7 +356,18 @@ class WebEngineWindow(QMainWindow):
     def _create_wait_for_element_with_text_and_click_step(
         self, selector: str, text: str, py_callback: str, timeout_ms: int
     ) -> Callable:
-        """Erstellt einen Schritt, der auf ein Element mit bestimmtem Text klickt."""
+        """
+        Erstellt einen Schritt, der auf ein Element mit bestimmtem Text klickt.
+
+        Args:
+            selector (str): CSS-Selektor des Elements.
+            text (str): Erwarteter Text im Element.
+            py_callback (str): Name des Python-Callbacks.
+            timeout_ms (int): Timeout in Millisekunden.
+
+        Returns:
+            Callable: Funktion, die den Schritt ausführt.
+        """
         if not all(isinstance(arg, str) and arg for arg in [selector, text]):
             error_msg = f"Ungültiger Selektor/Text für '{py_callback}'"
             logger.error(f"[Automation] {error_msg}. Breche Sequenz ab.")
@@ -294,7 +377,17 @@ class WebEngineWindow(QMainWindow):
         )
 
     def _create_wait_and_click_step(self, selector: str, py_callback: str, timeout_ms: int) -> Callable:
-        """Erstellt einen Schritt, der auf ein Element klickt."""
+        """
+        Erstellt einen Schritt, der auf ein Element klickt.
+
+        Args:
+            selector (str): CSS-Selektor des Elements.
+            py_callback (str): Name des Python-Callbacks.
+            timeout_ms (int): Timeout in Millisekunden.
+
+        Returns:
+            Callable: Funktion, die den Schritt ausführt.
+        """
         if not isinstance(selector, str) or not selector:
             error_msg = f"Ungültiger Selektor für '{py_callback}'"
             logger.error(f"[Automation] {error_msg}. Breche Sequenz ab.")
@@ -304,7 +397,18 @@ class WebEngineWindow(QMainWindow):
         )
 
     def _create_wait_and_type_step(self, selector: str, text: str, py_callback: str, timeout_ms: int) -> Callable:
-        """Erstellt einen Schritt, der Text in ein Element tippt."""
+        """
+        Erstellt einen Schritt, der Text in ein Element tippt.
+
+        Args:
+            selector (str): CSS-Selektor des Elements.
+            text (str): Einzutragender Text.
+            py_callback (str): Name des Python-Callbacks.
+            timeout_ms (int): Timeout in Millisekunden.
+
+        Returns:
+            Callable: Funktion, die den Schritt ausführt.
+        """
         if not isinstance(selector, str) or not selector:
             error_msg = f"Ungültiger Selektor für '{py_callback}'"
             logger.error(f"[Automation] {error_msg}. Breche Sequenz ab.")
@@ -316,7 +420,18 @@ class WebEngineWindow(QMainWindow):
     def _create_click_on_state_step(
         self, base_selector: str, state_class: str, label: str, click_if: Literal["checked", "unchecked"]
     ) -> Callable:
-        """Erstellt einen Schritt, der ein Element basierend auf einer Zustandsklasse anklickt."""
+        """
+        Erstellt einen Schritt, der ein Element basierend auf einer Zustandsklasse anklickt.
+
+        Args:
+            base_selector (str): CSS-Selektor des Elements.
+            state_class (str): CSS-Klasse für den Zustand.
+            label (str): Beschreibung des Schritts.
+            click_if (Literal["checked", "unchecked"]): Zustand, bei dem geklickt werden soll.
+
+        Returns:
+            Callable: Funktion, die den Schritt ausführt.
+        """
         if not all(isinstance(arg, str) and arg for arg in [base_selector, state_class]):
             error_msg = f"Ungültiger Selektor/Klasse für '{label}'"
             logger.error(f"[Automation] {error_msg}")
@@ -336,7 +451,16 @@ class WebEngineWindow(QMainWindow):
             )
 
     def _create_wait_for_spinner_to_disapear_step(self, py_callback: str, timeout_ms: int = 10000) -> Callable:
-        """Erstellt einen Schritt, der wartet, bis der Lade-Spinner verschwindet."""
+        """
+        Erstellt einen Schritt, der wartet, bis der Lade-Spinner verschwindet.
+
+        Args:
+            py_callback (str): Name des Python-Callbacks.
+            timeout_ms (int): Timeout in Millisekunden.
+
+        Returns:
+            Callable: Funktion, die den Schritt ausführt.
+        """
         logger.debug(f"[Automation] Erstelle Schritt für '{py_callback}': Warte auf Spinner.")
         return lambda: self.automation_service.wait_for_spinner_to_disappear(
             "on_generic_response", timeout_ms=timeout_ms
@@ -344,7 +468,12 @@ class WebEngineWindow(QMainWindow):
 
     @Slot(dict)
     def on_automation_step_finished(self, response: dict) -> None:
-        """Zentraler Handler für alle Rückmeldungen vom WebAutomationService."""
+        """
+        Zentraler Handler für alle Rückmeldungen vom WebAutomationService.
+
+        Args:
+            response (dict): Antwortdaten vom AutomationService.
+        """
         status = response.get("status")
         message = response.get("message")
         logger.debug(f"Automatisierungsschritt beendet: Status='{status}', Nachricht='{message}'")
@@ -361,13 +490,20 @@ class WebEngineWindow(QMainWindow):
             self.automation_sequence_failed.emit(error_message)
 
     def _on_page_load_finished(self, ok: bool) -> None:
-        """Wird aufgerufen, wenn die Seite vollständig geladen ist."""
+        """
+        Wird aufgerufen, wenn die Seite vollständig geladen ist.
+
+        Args:
+            ok (bool): Status, ob die Seite erfolgreich geladen wurde.
+        """
         logger.debug(f"Seite geladen: ok={ok}. Initialisiere JavaScript-Brücke...")
         self.automation_service.initialize_javascript_bridge()
 
     @Slot()
     def _on_bridge_ready(self) -> None:
-        """Wird aufgerufen, nachdem JS die Verbindung bestätigt hat."""
+        """
+        Wird aufgerufen, nachdem JS die Verbindung bestätigt hat.
+        """
         self._automation_ready = True
         logger.debug("Automatisierung ist jetzt bereit. Führe ggf. wartende Sequenz aus.")
         if self._pending_sequence:
@@ -378,7 +514,12 @@ class WebEngineWindow(QMainWindow):
 
     @Slot(dict)
     def _handle_selector_test_result(self, data: dict) -> None:
-        """Zeigt das Ergebnis des Selektor-Tests in der Statusleiste an."""
+        """
+        Zeigt das Ergebnis des Selektor-Tests in der Statusleiste an.
+
+        Args:
+            data (dict): Ergebnisdaten des Selektor-Tests.
+        """
         if "error" in data:
             message = f"JS-Fehler: {data['error']}"
             logger.error(f"[Selector Test] {message}")
@@ -389,7 +530,9 @@ class WebEngineWindow(QMainWindow):
         self.statusBar().showMessage(message)
 
     def _load_settings(self) -> None:
-        """Lädt die gespeicherte Fenstergeometrie."""
+        """
+        Lädt die gespeicherte Fenstergeometrie.
+        """
         geometry_hex = settings.web_window_geometry
         if geometry_hex:
             try:
@@ -401,12 +544,19 @@ class WebEngineWindow(QMainWindow):
             self.setGeometry(150, 150, 1024, 768)
 
     def _save_settings(self) -> None:
-        """Speichert die aktuelle Fenstergeometrie."""
+        """
+        Speichert die aktuelle Fenstergeometrie.
+        """
         geometry_hex = bytes(self.saveGeometry().toHex().data()).decode("utf-8")
         settings.web_window_geometry = geometry_hex
 
     def _get_analysis_prompt(self) -> str:
-        """Gibt den aktuellen Analyse-Prompt über den Service zurück."""
+        """
+        Gibt den aktuellen Analyse-Prompt über den Service zurück.
+
+        Returns:
+            str: Der aktuelle Analyse-Prompt.
+        """
         try:
             from yt_database.services.analysis_prompt_service import PromptType
 
@@ -426,7 +576,12 @@ class WebEngineWindow(QMainWindow):
             return self._analysis_prompt or ""
 
     def closeEvent(self, event) -> None:
-        """Überschreibt das Schließen-Event, um das Fenster nur auszublenden."""
+        """
+        Überschreibt das Schließen-Event, um das Fenster nur auszublenden.
+
+        Args:
+            event: Das Schließ-Event.
+        """
         self._save_settings()
         self.hide()
         event.ignore()

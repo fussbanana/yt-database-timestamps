@@ -32,8 +32,10 @@ from PySide6.QtWidgets import QMainWindow
 
 from yt_database.models.models import ChapterEntry, TranscriptData
 from yt_database.services.analysis_prompt_service import PromptType
+from yt_database.models.search_strategy import SearchStrategy
+from yt_database.models.search_models import SearchResult
 
-# --- Zirkulären Import für Typ-Prüfung auflösen ---
+# Zirkulären Import für Typ-Prüfung auflösen
 if TYPE_CHECKING:
     from yt_database.services.analysis_prompt_service import PromptType
     from yt_database.services.service_factory import ServiceFactory
@@ -266,16 +268,27 @@ class ProjectManagerProtocol(Protocol):
         """
         ...
 
-    def search_chapters(self, query: str) -> List[Any]:
-        """Sucht in Kapiteln nach dem gegebenen Begriff.
+    def search_chapters(
+        self, query: str, strategy: SearchStrategy = SearchStrategy.AUTO, limit: int = 50
+    ) -> List[SearchResult]:
+        """Sucht in Kapiteln nach dem gegebenen Begriff mit erweiterten Strategien.
 
         Args:
             query (str): Suchbegriff für die Volltextsuche.
+            strategy: Suchstrategie für erweiterte Query-Generierung (optional).
+            limit (int): Maximale Anzahl der Ergebnisse.
 
         Returns:
             List[Any]: Liste der gefundenen Kapitel.
         """
         ...
+
+    # Phase 4: Synonym Expander und Suggestion Provider
+    synonym_expander: Any
+    suggestion_provider: Any
+
+    # Phase 5: Semantische Suche mit AI-Embeddings
+    semantic_search_service: Any
 
     def create_transcript_data_for_batch(self, channel_url: str, video_ids: list[str]) -> list[TranscriptData]:
         """Erstellt eine Liste von TranscriptData-Objekten für die Stapelverarbeitung."""
@@ -376,7 +389,7 @@ class BatchTranscriptionServiceProtocol(Protocol):
         ...
 
 
-# --- Protokolle für Selektoren ---
+# Protokolle für Selektoren
 
 
 class TabSelectorProtocol(Protocol):
@@ -520,7 +533,7 @@ class SelectorServiceProtocol(Protocol):
     send_button: SendButtonSelectorProtocol
 
 
-# --- UI- und Web-Protokolle ---
+# UI- und Web-Protokolle
 
 
 @runtime_checkable
@@ -908,7 +921,7 @@ class SingleTranscriptionServiceProtocol(Protocol):
         ...
 
 
-# --- Worker-Protokolle ---
+# Worker-Protokolle
 
 
 @runtime_checkable

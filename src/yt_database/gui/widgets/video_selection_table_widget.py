@@ -17,9 +17,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from yt_database.gui.utils.icons import Icons
 from yt_database.models.models import TranscriptData
 from yt_database.services.analysis_prompt_service import AnalysisPromptService, PromptType
-from yt_database.gui.utils.icons import Icons
 
 
 class VideoSelectionTableWidget(QWidget):

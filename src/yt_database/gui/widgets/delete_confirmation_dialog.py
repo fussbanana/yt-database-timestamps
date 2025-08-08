@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
 from yt_database.gui.utils.icons import Icons
+
 
 class DeleteConfirmationDialog(QDialog):
     """Sicherheitsdialog mit detaillierten Statistiken vor Löschung."""
@@ -31,7 +33,7 @@ class DeleteConfirmationDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Warnung Header
-        from PySide6.QtWidgets import QHBoxLayout
+
         warning_widget = QWidget()
         warning_layout = QHBoxLayout(warning_widget)
         warning_layout.setContentsMargins(0, 0, 0, 0)

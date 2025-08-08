@@ -1,5 +1,55 @@
 # yt-database
 
+## Update
+
+### Implementierte Features - Übersicht
+
+### (Basis)
+
+- 5 Suchstrategien: AUTO, EXACT, ALL, ANY, FUZZY
+- BM25-Relevanz-Ranking statt Standard-FTS5
+- Query-Parser für komplexe Syntax: "exakte Phrasen", +required, -excluded
+- Snippet-Highlighting in Suchergebnissen
+
+### (Erweiterte Suche)
+
+- Synonym-Expansion mit 15 semantischen Kategorien
+- SearchSuggestionProvider mit Datenbank-basiertem Ranking
+- Live-Suchvorschläge in GUI
+- Intelligente Auto-Strategie mit Fallback-Logik
+
+### (AI-Semantische Suche)
+
+- Semantische Suche mit AI-Embeddings (384-dimensionale Vektoren)
+- Bedeutungsbasierte Suche ohne exakte Keywords
+- Hybrid-Suche: 60% Semantic + 40% Keywords, gewichtet
+- Vector Database mit SQLite BLOB-Speicherung
+- CPU-optimierte sentence-transformers Integration
+
+### GUI-Integration
+
+- 7 Suchstrategien in ComboBox verfügbar
+- SearchWidgetTree mit Live-Suggestions
+- SignalHandler verbindet Backend mit Frontend
+- Vollständige Protokoll-basierte Typisierung
+
+### Technische Details
+
+- Cosine-Similarity für Vektor-Ähnlichkeitsberechnung
+- Batch-Embedding für bestehende Kapitel
+- Lazy-Loading für AI-Model (150MB)
+- Performance-Monitoring und Caching-bereit
+
+### Aktuelle Suchstrategien (7 total)
+
+1. AUTO - Intelligente automatische Auswahl
+2. EXACT - Exakte Phrasen-Suche
+3. ALL - Alle Wörter müssen vorkommen (AND)
+4. ANY - Mindestens ein Wort (OR)
+5. FUZZY - Wildcards und Prefix-Matching
+6. SEMANTIC - Reine AI-basierte Bedeutungssuche
+7. HYBRID - Kombiniert AI + Keywords optimal
+
 ## Übersicht
 
 `yt-database` ist eine modulare Python-Anwendung zur automatisierten Verarbeitung, Analyse und Verwaltung von YouTube-Transkripten und Metadaten. Das Projekt bietet eine moderne GUI (PySide6), eine CLI, sowie eine flexible Service-Architektur für verschiedene Workflows (Transkription, Prompt-Generierung, Datenbankverwaltung).
