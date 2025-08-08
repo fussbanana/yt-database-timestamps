@@ -1,8 +1,8 @@
-# yt-database-timestamps
+# yt-database
 
 ## Übersicht
 
-`yt-database-timestamps` ist eine modulare Python-Anwendung zur automatisierten Verarbeitung, Analyse und Verwaltung von YouTube-Transkripten und Metadaten. Das Projekt bietet eine moderne GUI (PySide6), eine CLI, sowie eine flexible Service-Architektur für verschiedene Workflows (Transkription, Prompt-Generierung, Datenbankverwaltung).
+`yt-database` ist eine modulare Python-Anwendung zur automatisierten Verarbeitung, Analyse und Verwaltung von YouTube-Transkripten und Metadaten. Das Projekt bietet eine moderne GUI (PySide6), eine CLI, sowie eine flexible Service-Architektur für verschiedene Workflows (Transkription, Prompt-Generierung, Datenbankverwaltung).
 
 ## Features
 
@@ -15,8 +15,25 @@
 - Konfigurierbare Prompts und Analyse-Workflows
 - Umfangreiche Test- und Mock-Services
 
-
 ## Installation
+
+Voraussetzungen:
+
+- Python ≥ 3.12
+- Poetry
+- SQLite3 (CLI) empfohlen, Datenbank-Engine ist SQLite mit FTS5
+- Node.js und npm (für SASS-Live-Kompilierung)
+
+Beispiele zur Installation unter Linux:
+
+```bash
+# Debian/Ubuntu
+sudo apt update
+sudo apt install -y sqlite3 nodejs npm
+
+# Fedora
+sudo dnf install -y sqlite nodejs npm
+```
 
 ```bash
 # Voraussetzungen: Python >= 3.12, poetry
@@ -68,11 +85,43 @@ poetry run python src/yt_database/cli/get_video_transcription.py --help
 
 ## Tests & Entwicklung
 
-- Test- und Mock-Services unter `src/yt_database/services/mocks/`
-- Coverage-Reports unter `htmlcov/`
-- Diagramme und Architekturübersichten unter `diagram.md`, `yt-database _ sequencechart.svg`
+## SASS-Live-Kompilierung (SCSS ➜ QSS)
+
+Die GUI verwendet ein Stylesheet in QSS-Form (`main.qss`). Zur komfortablen Entwicklung wird `main.qss` aus der SASS/SCSS-Quelle `main.scss` erzeugt und per Watch-Task laufend neu kompiliert. Der `StyleManager` lädt Änderungen an `main.qss` automatisch live in die laufende Anwendung.
+
+Voraussetzungen:
+
+- Node.js und npm installiert
+
+Installation der Abhängigkeiten (Dart Sass als Dev-Dependency):
+
+```bash
+npm install --save-dev sass
+```
+
+Einmalige Kompilierung (ohne Watch):
+
+```bash
+npx sass src/yt_database/resources/styles/main.scss src/yt_database/resources/styles/main.qss
+```
+
+Watch-Mode (empfohlen für die Entwicklung):
+
+```bash
+npx sass --watch \
 
 ## Beispiel-Workflow
+```
+
+Hinweise:
+
+- Stelle sicher, dass die GUI läuft (z. B. per `poetry run gui`). Der `StyleManager` beobachtet `main.qss` und lädt Änderungen automatisch.
+- QSS ist ein Subset von CSS. Verwende nur Eigenschaften, die von Qt Stylesheets unterstützt werden.
+- Falls Ressourcen (Icons) geändert werden, kompiliere die Qt-Resource-Datei optional neu:
+
+ ```bash
+ poetry run python scripts/compile_resources.py
+ ```
 
 1. Video-URL oder ID eingeben
 2. Transkript generieren (GUI oder CLI)
